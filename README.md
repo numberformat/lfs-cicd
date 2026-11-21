@@ -6,7 +6,7 @@
 > disk image. See the [Proxmox design and implementation status](docs/proxmox-design.md)
 > for template maintenance, isolation, build stages, and the proposed update policy.
 > See the [setup and operation guide](docs/proxmox-runbook.md) for the separate adapter.
-> Isolation and the first stage/checkpoint handoff passed validation; a full LFS build is still pending. Upstream build scripts,
+> The GitHub Actions smoke test and first stage/checkpoint handoff passed validation; full-build validation is in progress. Upstream build scripts,
 > CI stages, and workflow triggers are preserved to ease upstream pulls and contributions.
 
 ## Install the local Proxmox runner

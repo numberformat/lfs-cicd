@@ -8,9 +8,10 @@ Validated in the reference environment: isolated VM lifecycle, blocked host
 connections and working public HTTPS, the complete upstream `part2` preparation
 stage, checkpoint save, and restoration/import/mount in a fresh 12-vCPU VM on
 SSD-backed `local-lvm`. The test VMs were removed. The full LFS compilation and
-final boot test have not yet been run through the adapter. A repository-level
+final boot test have not yet completed validation through the adapter. A repository-level
 Mac runner is installed and online in the reference environment; no organization
-runner was changed. Publish the reviewed workflow changes before dispatching it.
+runner was changed. The workflow is published, its GitHub Actions smoke run
+passed, and the first full build is in progress. See the [validation status](proxmox-design.md#implementation-status).
 
 ## Controller requirements
 

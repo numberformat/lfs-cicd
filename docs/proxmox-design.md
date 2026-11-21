@@ -161,7 +161,14 @@ settings or test failures; general-purpose fixes should be separately reviewable
 | Six-stage adapter and separate manual workflow | Implemented; first stage and handoff to the next stage passed |
 | Local artifact/checkpoint transport | Full-size checkpoint save/restore passed; final image export not yet validated |
 | Personal-repository GitHub runner | Installed as a separate macOS LaunchAgent and verified online; organization runner untouched |
-| Full LFS build and final boot test on this adapter | Not yet validated |
+| GitHub Actions smoke workflow | Passed, including provisioning, isolation checks, and cleanup |
+| Full LFS build and final boot test on this adapter | Full workflow launched; results pending |
+
+The first GitHub Actions [smoke run](https://github.com/numberformat/lfs-cicd/actions/runs/44911463691)
+passed. The [full validation build](https://github.com/numberformat/lfs-cicd/actions/runs/44911665594)
+was launched from commit `d5ff296`; compilation and boot validation are not yet
+confirmed. The workflow runs independently of an agent and reports its result
+in GitHub Actions.
 
 The original [README](../README.md) retains upstream's Docker instructions.
 Follow the [Proxmox runbook](proxmox-runbook.md) for this deployment. Keep
