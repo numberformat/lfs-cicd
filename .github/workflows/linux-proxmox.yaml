@@ -8,6 +8,10 @@ on:
         type: choice
         options: [smoke, build]
         default: smoke
+      compile_jobs:
+        description: 'Optional jhalfs compile jobs (1–256); blank uses upstream configuration'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -26,6 +30,7 @@ jobs:
       LFS_PROXMOX_KEY_PATH: ${{ vars.LFS_PROXMOX_KEY_PATH }}
       LFS_PROXMOX_ARTIFACTS: ${{ vars.LFS_PROXMOX_ARTIFACTS }}
       BUILD_MODE: ${{ inputs.mode }}
+      LFS_COMPILE_JOBS: ${{ inputs.compile_jobs }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -38,6 +43,8 @@ jobs:
         run: caffeinate -i scripts/proxmox/.venv/bin/python scripts/proxmox/run.py --mode "$BUILD_MODE"
       - name: Clean up this run after failure or cancellation
         if: always()
+        env:
+          LFS_COMPILE_JOBS: ''
         run: |
           if test -x scripts/proxmox/.venv/bin/python; then
             scripts/proxmox/.venv/bin/python scripts/proxmox/run.py --mode cleanup

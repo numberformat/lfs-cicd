@@ -6,7 +6,7 @@
 > disk image. See the [Proxmox design and implementation status](docs/proxmox-design.md)
 > for template maintenance, isolation, build stages, and the proposed update policy.
 > See the [setup and operation guide](docs/proxmox-runbook.md) for the separate adapter.
-> The GitHub Actions smoke test and first stage/checkpoint handoff passed validation; full-build validation is in progress. Upstream build scripts,
+> The GitHub Actions smoke test and full build, including its boot test, passed. Upstream build scripts,
 > CI stages, and workflow triggers are preserved to ease upstream pulls and contributions.
 
 ## Prerequisites and deployment assumptions

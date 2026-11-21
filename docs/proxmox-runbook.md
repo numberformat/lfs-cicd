@@ -7,11 +7,19 @@ been changed; `lfs-proxmox` names the deployment components.
 Validated in the reference environment: isolated VM lifecycle, blocked host
 connections and working public HTTPS, the complete upstream `part2` preparation
 stage, checkpoint save, and restoration/import/mount in a fresh 12-vCPU VM on
-SSD-backed `local-lvm`. The test VMs were removed. The full LFS compilation and
-final boot test have not yet completed validation through the adapter. A repository-level
+SSD-backed `local-lvm`. The full LFS build and boot test also passed through the adapter. A repository-level
 Mac runner is installed and online in the reference environment; no organization
 runner was changed. The workflow is published, its GitHub Actions smoke run
-passed, and the first full build is in progress. See the [validation status](proxmox-design.md#implementation-status).
+passed. See the [validation status](proxmox-design.md#implementation-status).
+
+For an optional parallel build, set the manual workflow's `compile_jobs` input
+to a number from 1 to 256, for example `12`. Leave it blank to use the upstream
+`configuration` unchanged (currently `N_PARALLEL=1`). The adapter changes only
+the uploaded guest copy before jhalfs generates commands, leaving jhalfs's
+package-specific serial rules intact. The requested value is logged and recorded
+in the local artifact manifest. Parallel builds can require more memory; the
+reference VM has 16 GiB. If a build fails, check its diagnostics for out-of-memory
+evidence before changing VM resources.
 
 ## Controller requirements
 

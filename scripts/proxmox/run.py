@@ -110,7 +110,27 @@ def validate_workflow(workflow):
                 raise ValueError(f'upstream shell changed: {step["shell"]}')
 
 
-def run_stage(client, stage, job, sha, destination, smoke=False):
+def compile_jobs(value):
+    if not re.fullmatch(r'[1-9][0-9]{0,2}', value) or int(value) > 256:
+        raise argparse.ArgumentTypeError('compile jobs must be an integer from 1 to 256')
+    return int(value)
+
+
+def override_script(jobs):
+    # Applied only to the uploaded guest checkout, before jhalfs reads it.
+    return """python3 - <<'PY'
+from pathlib import Path
+import re
+p = Path('configuration')
+original = p.read_text()
+updated, count = re.subn(r'^N_PARALLEL=[0-9]+$', 'N_PARALLEL=%d', original, flags=re.MULTILINE)
+if count != 1:
+    raise SystemExit('expected exactly one N_PARALLEL setting')
+p.write_text(updated)
+PY""" % jobs
+
+
+def run_stage(client, stage, job, sha, destination, smoke=False, jobs=None):
     failed = False
     created = False
     deferred = []
@@ -133,6 +153,8 @@ def run_stage(client, stage, job, sha, destination, smoke=False):
                         'qemu-system-x86_64 --version; test -s /etc/machine-id', timeout=60)
             return
         upload(client, stage)
+        if stage == 'part2' and jobs is not None:
+            client.call('exec', stage, script=override_script(jobs), timeout=60)
         for step in job['steps']:
             name = step.get('name', step.get('uses', 'unnamed'))
             if not condition(step.get('if'), failed):
@@ -192,9 +214,14 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--mode', choices=('plan', 'smoke', 'build', 'cleanup'), default='plan')
     p.add_argument('--stage', choices=STAGES)
+    p.add_argument('--compile-jobs', type=compile_jobs,
+                   default=os.getenv('LFS_COMPILE_JOBS') or None,
+                   help='override jhalfs N_PARALLEL in the guest (default: upstream configuration)')
     p.add_argument('--run', default=f'{os.getenv("GITHUB_RUN_ID", str(int(time.time())))}-'
                    f'{os.getenv("GITHUB_RUN_ATTEMPT", "1")}')
     args = p.parse_args()
+    if args.compile_jobs is not None and args.stage not in (None, 'part2'):
+        p.error('compile jobs must be set when starting at part2')
     if args.mode == 'cleanup':
         client = Client(os.environ['LFS_PROXMOX_HOST'], os.environ['LFS_PROXMOX_KEY_PATH'], args.run)
         client.call('cleanup', STAGES[0])
@@ -220,11 +247,12 @@ def main():
         / args.run)
     destination.mkdir(mode=0o700, parents=True, exist_ok=True)
     (destination / 'manifest.json').write_text(json.dumps(dict(
-        repository_commit=sha, run=args.run, stages=stages,
+        repository_commit=sha, run=args.run, stages=stages, compile_jobs=args.compile_jobs,
         upstream_workflow=str(workflow_path.relative_to(ROOT))), indent=2) + '\n')
+    print(f'Compile jobs: {args.compile_jobs if args.compile_jobs is not None else "upstream default"}', flush=True)
     for stage in stages:
         run_stage(client, stage, workflow['jobs'][stage], sha, destination,
-                  smoke=args.mode == 'smoke')
+                  smoke=args.mode == 'smoke', jobs=args.compile_jobs)
         if args.mode == 'smoke':
             break
     print(f'Artifacts: {destination}', flush=True)

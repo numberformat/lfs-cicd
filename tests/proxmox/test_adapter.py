@@ -1,4 +1,5 @@
 import importlib.util
+import argparse
 import io
 import json
 import shlex
@@ -103,6 +104,36 @@ class OwnershipTests(unittest.TestCase):
 
 
 class AdapterTests(unittest.TestCase):
+    def test_compile_jobs_validation_and_guest_override(self):
+        self.assertEqual(adapter.compile_jobs('12'), 12)
+        for bad in ('0', '-1', '257', '12;false', ' 12', '01'):
+            with self.subTest(value=bad), self.assertRaises(argparse.ArgumentTypeError):
+                adapter.compile_jobs(bad)
+        with tempfile.TemporaryDirectory() as temp:
+            config = Path(temp) / 'configuration'
+            original = (ROOT / 'configuration').read_text()
+            config.write_text(original)
+            subprocess.run(['bash', '-e', '-c', adapter.override_script(12)], cwd=temp, check=True)
+            self.assertEqual(config.read_text(), original.replace('N_PARALLEL=1\n', 'N_PARALLEL=12\n'))
+            config.write_text(original + '\nN_PARALLEL=2\n')
+            with self.assertRaises(subprocess.CalledProcessError):
+                subprocess.run(['bash', '-e', '-c', adapter.override_script(12)], cwd=temp,
+                               check=True, stderr=subprocess.DEVNULL)
+
+    def test_override_runs_only_for_part2_after_upload(self):
+        client = MagicMock()
+        job = dict(steps=[dict(name='prepare', run='generate')])
+        with patch.object(adapter, 'upload') as upload, tempfile.TemporaryDirectory() as temp:
+            adapter.run_stage(client, 'part2', job, 'a' * 40, Path(temp), jobs=12)
+            upload.assert_called_once()
+        scripts = [c.kwargs.get('script') for c in client.call.call_args_list if c.args[0] == 'exec']
+        self.assertEqual(scripts, [adapter.override_script(12), 'generate'])
+        client.reset_mock()
+        with patch.object(adapter, 'upload'), tempfile.TemporaryDirectory() as temp:
+            adapter.run_stage(client, 'part2', job, 'a' * 40, Path(temp))
+        scripts = [c.kwargs.get('script') for c in client.call.call_args_list if c.args[0] == 'exec']
+        self.assertEqual(scripts, ['generate'])
+
     def test_current_upstream_workflow_is_supported(self):
         import yaml
         source = ROOT / '.github/workflows/linux-gha.yaml'
