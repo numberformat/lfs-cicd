@@ -1,0 +1,44 @@
+name: linux-proxmox
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Validate the VM and isolation, or run all upstream stages
+        type: choice
+        options: [smoke, build]
+        default: smoke
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lfs-proxmox-builder
+  cancel-in-progress: false
+
+jobs:
+  orchestrate:
+    # This label must be explicitly assigned to a trusted local Mac runner.
+    runs-on: [self-hosted, macOS, lfs-proxmox]
+    timeout-minutes: 2880
+    env:
+      LFS_PROXMOX_HOST: ${{ vars.LFS_PROXMOX_HOST }}
+      LFS_PROXMOX_KEY_PATH: ${{ vars.LFS_PROXMOX_KEY_PATH }}
+      LFS_PROXMOX_ARTIFACTS: ${{ vars.LFS_PROXMOX_ARTIFACTS }}
+      BUILD_MODE: ${{ inputs.mode }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install controller dependency
+        run: |
+          python3 -m venv scripts/proxmox/.venv
+          scripts/proxmox/.venv/bin/pip install -r scripts/proxmox/requirements.txt
+      - name: Run the unchanged upstream stages on isolated VMs
+        run: caffeinate -i scripts/proxmox/.venv/bin/python scripts/proxmox/run.py --mode "$BUILD_MODE"
+      - name: Clean up this run after failure or cancellation
+        if: always()
+        run: |
+          if test -x scripts/proxmox/.venv/bin/python; then
+            scripts/proxmox/.venv/bin/python scripts/proxmox/run.py --mode cleanup
+          fi

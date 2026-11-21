@@ -1,5 +1,71 @@
 [![ci](https://github.com/marcindulak/jhalfs-ci/workflows/linux-gha/badge.svg)](https://github.com/marcindulak/jhalfs-ci/actions/workflows/linux-gha.yaml)
 
+> **Proxmox deployment (this fork):** The supported deployment being developed
+> requires a **Proxmox VE server and a self-hosted GitHub Actions runner on the
+> local network** (reference runner: MacBook). It builds a persistent systemd LFS
+> disk image. See the [Proxmox design and implementation status](docs/proxmox-design.md)
+> for template maintenance, isolation, build stages, and the proposed update policy.
+> See the [setup and operation guide](docs/proxmox-runbook.md) for the separate adapter.
+> Isolation and the first stage/checkpoint handoff passed validation; a full LFS build is still pending. Upstream build scripts,
+> CI stages, and workflow triggers are preserved to ease upstream pulls and contributions.
+
+## Install the local Proxmox runner
+
+This fork adds **`linux-proxmox`** alongside upstream's **`linux-gha`**.
+`linux-gha` is unchanged. `linux-proxmox` is manually started from GitHub Actions
+and uses a repository-scoped runner on a Mac on your local network; the build
+itself runs in isolated Proxmox VMs.
+
+1. Install Python 3.10 or newer and the GitHub CLI (`gh`) on the Mac, then
+   authenticate with `gh auth login` using an account permitted to manage this
+   repository's runners and Actions variables.
+2. Complete the [Proxmox administrator setup](docs/proxmox-runbook.md), including
+   the builder template, isolated bridge, restricted provisioning key, and
+   trusted Proxmox SSH host key. Keep the private key outside the checkout.
+3. From this repository, install the dedicated runner. Replace the example
+   repository and hostname with your own:
+
+   ```sh
+   python3 scripts/proxmox/install-runner.py \
+     --repo OWNER/REPOSITORY \
+     --proxmox-host pve.example \
+     --key-path "$HOME/.config/lfs-proxmox/runner_key"
+   ```
+
+The installer detects Apple Silicon or Intel, downloads the official GitHub
+runner, verifies its SHA-256 checksum, and registers it with the `lfs-proxmox`
+label. It installs and starts a per-user macOS LaunchAgent **without sudo**.
+Its default directory is `~/.local/share/lfs-proxmox/runner`, separate from any
+organization runner. It does not replace or reconfigure existing runners.
+Registration tokens are not printed or saved by the installer.
+
+With `--proxmox-host`, it first checks the restricted connection and sets these
+repository Actions variables: `LFS_PROXMOX_HOST`, `LFS_PROXMOX_KEY_PATH`, and
+`LFS_PROXMOX_ARTIFACTS`. Only the key's local path is configured; the private key
+is not uploaded to GitHub. Site-specific settings stay out of public source.
+
+After the workflow files are committed and pushed to the repository's default
+branch, open **Actions → linux-proxmox → Run workflow**. Select `smoke` first to
+test VM creation, isolation, and cleanup; select `build` to run all six upstream
+stages and retain the resulting disk image. The definition is
+[linux-proxmox.yaml](.github/workflows/linux-proxmox.yaml).
+
+Keep the Mac logged in, powered, and connected to the network. The build step
+prevents idle sleep. To manage only this runner:
+
+```sh
+cd "$HOME/.local/share/lfs-proxmox/runner"
+./svc.sh status
+# ./svc.sh stop
+# ./svc.sh start
+```
+
+Use trusted manual workflow revisions; do not enable untrusted fork pull requests
+on this local runner. A personal repository needs its own registration;
+organization runners do not serve repositories outside their organization.
+See [GitHub's runner setup guide](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners)
+and the [full Proxmox runbook](docs/proxmox-runbook.md).
+
 # Description
 
 This project performs Automated Linux From Scratch [jhalfs](https://www.linuxfromscratch.org/alfs) using docker.
