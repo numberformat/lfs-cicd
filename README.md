@@ -9,6 +9,82 @@
 > The GitHub Actions smoke test and first stage/checkpoint handoff passed validation; full-build validation is in progress. Upstream build scripts,
 > CI stages, and workflow triggers are preserved to ease upstream pulls and contributions.
 
+## Prerequisites and deployment assumptions
+
+The Mac coordinates the build; the Linux VM does the compilation. Docker and
+QEMU are needed **in the builder template**, not on the Mac. Vagrant is not
+required; `/vagrant` is an upstream container mount path.
+
+| Component | Required setup |
+| --- | --- |
+| Proxmox | An x86-64 Proxmox VE host, reachable from the Mac by SSH; administrator access for one-time setup |
+| Base cloud-init template | Ubuntu 24.04, example VM **9000**; this is the starting point for template maintenance |
+| Prepared builder template | Example VM **9001**, stopped and converted to a Proxmox template after updates, tool installation, reboot, and identity cleanup |
+| Template hardware | Root disk **`scsi0`**, cloud-init drive **`ide2`**, QEMU guest agent enabled, virtual serial console; no passthrough devices, host shares, or host hooks |
+| Template guest | User **`ubuntu`**, passwordless sudo, working cloud-init and QEMU guest agent; Docker, Compose, QEMU, Expect, Git, curl, and CA certificates installed |
+| Disposable builder slot | Example VM **9100**, reserved exclusively for this project; it must not be an existing valuable VM |
+| Build resources | Reference: **12 vCPUs, 16 GiB RAM, 100 GiB disk**; compile job count is separate from VM CPU count |
+| Active VM storage | Reference: **`local-lvm`**, SSD-backed |
+| Checkpoint storage | Reference: **`data-zfs`**, HDD-backed, with files under **`/data/lfs-proxmox`**; never mounted into the guest |
+| Network | A private bridge with no physical uplink or other VMs; administrator-installed rules allow public downloads and block guest access to host/LAN destinations |
+| Local runner | A repository-scoped macOS runner, on the local network, with label **`lfs-proxmox`**; Python 3.10+, Git, GitHub CLI, curl, and OpenSSH |
+| Downloads | Internet access for runner installation, container images, the book, and package sources; use an unmetered connection |
+
+The VM pool must have room for the 100 GiB builder **plus a 100 GiB reserve**.
+Checkpoint writes retain a separate 100 GiB filesystem reserve. Allow substantial
+checkpoint capacity across runs and remove obsolete checkpoints as an administrator.
+The Mac also needs space for the finished image, with a 10 GiB reserve.
+
+### Names, addresses, and paths
+
+These are reference defaults, not discovery rules. Configure different values
+through the installer and private deployment settings; do not edit upstream
+build scripts to change a hostname or VM ID.
+
+| Setting | Reference value or convention |
+| --- | --- |
+| Proxmox hostname in public examples | `pve.example`; replace it with your own reachable hostname |
+| Base / prepared template names | `ubuntu-2404-cloudinit` / `lfs-builder-ubuntu2404` |
+| Build VM name | Generated: `lfs-RUN_ID-ATTEMPT-STAGE`; the same VM ID is reused sequentially for the six stages |
+| Private bridge / uplink | `vmbr99` / `vmbr0` |
+| Private subnet / gateway / guest | `172.30.240.0/24` / `172.30.240.1` / `172.30.240.10` |
+| Guest DNS | Public resolvers `1.1.1.1` and `9.9.9.9`; the guest does not use private LAN DNS |
+| Runner name / label | `macbook-lfs-proxmox` / `lfs-proxmox` |
+| Runner installation on Mac | `~/.local/share/lfs-proxmox/runner` |
+| Restricted provisioning key on Mac | `~/.config/lfs-proxmox/runner_key`; keep private and outside Git |
+| Finished artifacts on Mac | `~/.local/share/lfs-proxmox/artifacts/RUN_ID-ATTEMPT/` |
+| Proxmox administrator configuration | `/etc/lfs-proxmox/config.json` and `/etc/lfs-proxmox/rules.nft` |
+| Proxmox checkpoints / active-run marker | `/data/lfs-proxmox/cache/` / `/data/lfs-proxmox/active.json` |
+| Guest checkout / container mount | `/home/ubuntu/lfs-cicd` / `/vagrant` |
+
+The broker reads its VM ID, template, storage, addresses, and resource limits
+from root-owned configuration. Workflow inputs cannot override those resources.
+Never attach another VM or a physical uplink to the private build bridge.
+The installer requires per-interface forwarding on the chosen uplink; it does
+not enable the global forwarding switch. See the [administrator runbook](docs/proxmox-runbook.md).
+
+### Returning after a few months
+
+1. Read this section and the [implementation status](docs/proxmox-design.md#implementation-status).
+   Template 9001 being stopped is normal. VM 9100 and `active.json` being absent
+   while idle is also normal; the workflow creates and removes the builder.
+2. On the reference Mac, find the actual private deployment inventory at
+   `~/.config/lfs-proxmox/deployment.json`. It records local names and paths,
+   not private-key contents. A fresh clone will not contain this private file;
+   the repository Actions variables and Proxmox administrator configuration are
+   the other sources of truth. Back up the inventory and key outside Git.
+3. Check the template and storage in Proxmox: `qm config 9001` and `pvesm status`.
+   Confirm the template, agent, storage, and free space before building.
+4. Check the Mac runner from its installation directory: `./svc.sh status`.
+   In repository **Settings → Actions → Runners**, it should be online and have
+   the `lfs-proxmox` label. Check the three Actions variables listed below.
+5. In **Actions → linux-proxmox**, run `smoke` before `build`. Keep the Mac logged
+   in, powered, and connected. Do not rerun first-time host installation over a
+   working deployment or disable isolation guards to bypass an error.
+6. Find the completed disk at `artifacts/RUN_ID-ATTEMPT/build_dir.img` under the
+   configured artifact directory. Intermediate checkpoints are on Proxmox.
+   Inspect GitHub Actions logs for failures; use a short tail first.
+
 ## Install the local Proxmox runner
 
 This fork adds **`linux-proxmox`** alongside upstream's **`linux-gha`**.
