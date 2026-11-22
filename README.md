@@ -1,15 +1,39 @@
-[![ci](https://github.com/marcindulak/jhalfs-ci/workflows/linux-gha/badge.svg)](https://github.com/marcindulak/jhalfs-ci/actions/workflows/linux-gha.yaml)
 
-> **Proxmox deployment (this fork):** The supported deployment being developed
-> requires a **Proxmox VE server and a self-hosted GitHub Actions runner on the
-> local network** (reference runner: MacBook). It builds a persistent systemd LFS
-> disk image. See the [Proxmox design and implementation status](docs/proxmox-design.md)
-> for template maintenance, isolation, build stages, and the proposed update policy.
-> See the [setup and operation guide](docs/proxmox-runbook.md) for the separate adapter.
-> The baseline and 12-job builds passed. The 12-job image also booted in a
-> separate Proxmox VM. See the [build results](docs/proxmox-design.md#implementation-status)
-> and [console inspection steps](docs/proxmox-runbook.md#inspect-the-final-image-in-proxmox).
-> Upstream build scripts, CI stages, and workflow triggers are preserved.
+
+# Description
+
+This project performs Automated Linux From Scratch [jhalfs](https://www.linuxfromscratch.org/alfs) using docker.
+The approach is similar to the one taken by [LFScm](https://github.com/masmullin2000/LFScm): lfs is built
+inside of a docker container on a loopback device, and the resulting image booted in qemu.
+
+**Warning**: this project uses privileged containers, and may make your host (laptop) non-bootable if used improperly.
+
+The [jhalfs](https://www.linuxfromscratch.org/alfs) is a set of scripts which retrieves
+the Linux From Scratch [lfs](https://www.linuxfromscratch.org/lfs/) book, extracts
+the commands by parsing the chapter's XML, and generates scripts managed using a makefile.
+The [systemd version of the lfs](https://www.linuxfromscratch.org/lfs/view/systemd/) book is used,
+as systemd is the standard nowadays.
+
+**Note**: the setup requires about 25GB of disk space (a bit less than twice the size of the loopback file).
+Intel processor architecture is supported.
+Apple silicon (unsuccessful yet) notes are collected in [1](https://github.com/marcindulak/jhalfs-ci/issues/1).
+To be clear, this project does not boot lfs on a physical drive attached to computer,
+but instead boots an lfs image in an `x86_64/amd64` or `aarch64/arm64` qemu.
+
+# Setup
+
+1. Install [docker](https://docs.docker.com/engine/install/ubuntu/) and [docker-compose](https://docs.docker.com/compose/install/).
+   On MacOS install [rancher-desktop](https://rancherdesktop.io/),
+   and during the installation select "moby/dockerd" as the engine.
+   Docker is used to perform the jhalfs build inside of an Ubuntu container.
+
+2. Install [qemu](https://www.qemu.org/).
+   On Ubuntu use `sudo apt-get install -y qemu-kvm` and on MacOS use `brew install qemu`.
+   Qemu is used as a virtual machine used to boot the created lfs system.
+
+3. Install [expect](https://core.tcl-lang.org/expect).
+   On Ubuntu use `sudo apt-get install -y expect` and on MacOS use `brew install expect`.
+   Expect is used to perform an automated test of lfs booting.
 
 ## Prerequisites and deployment assumptions
 
@@ -36,6 +60,24 @@ The VM pool must have room for the 100 GiB builder **plus a 100 GiB reserve**.
 Checkpoint writes retain a separate 100 GiB filesystem reserve. Allow substantial
 checkpoint capacity across runs and remove obsolete checkpoints as an administrator.
 The Mac also needs space for the finished image, with a 10 GiB reserve.
+
+
+> **Proxmox deployment (this fork):** The supported deployment being developed
+> requires a **Proxmox VE server and a self-hosted GitHub Actions runner on the
+> local network** (reference runner: MacBook). It builds a persistent systemd LFS
+> disk image. See the [Proxmox design and implementation status](docs/proxmox-design.md)
+> for template maintenance, isolation, build stages, and the proposed update policy.
+> See the [setup and operation guide](docs/proxmox-runbook.md) for the separate adapter.
+> The baseline and 12-job builds passed. The 12-job image also booted in a
+> separate Proxmox VM. See the [build results](docs/proxmox-design.md#implementation-status)
+> and [console inspection steps](docs/proxmox-runbook.md#inspect-the-final-image-in-proxmox).
+> Upstream build scripts, CI stages, and workflow triggers are preserved.
+
+![Proxmox console showing the built Linux From Scratch guest, its kernel version, and a successful loopback ping](docs/images/proxmox-lfs-console.png)
+
+*The image produced by the 12-job build running in Proxmox. The console shows
+the LFS release, the running kernel, and a successful loopback ping.*
+
 
 ### Names, addresses, and paths
 
@@ -143,41 +185,6 @@ on this local runner. A personal repository needs its own registration;
 organization runners do not serve repositories outside their organization.
 See [GitHub's runner setup guide](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners)
 and the [full Proxmox runbook](docs/proxmox-runbook.md).
-
-# Description
-
-This project performs Automated Linux From Scratch [jhalfs](https://www.linuxfromscratch.org/alfs) using docker.
-The approach is similar to the one taken by [LFScm](https://github.com/masmullin2000/LFScm): lfs is built
-inside of a docker container on a loopback device, and the resulting image booted in qemu.
-
-**Warning**: this project uses privileged containers, and may make your host (laptop) non-bootable if used improperly.
-
-The [jhalfs](https://www.linuxfromscratch.org/alfs) is a set of scripts which retrieves
-the Linux From Scratch [lfs](https://www.linuxfromscratch.org/lfs/) book, extracts
-the commands by parsing the chapter's XML, and generates scripts managed using a makefile.
-The [systemd version of the lfs](https://www.linuxfromscratch.org/lfs/view/systemd/) book is used,
-as systemd is the standard nowadays.
-
-**Note**: the setup requires about 25GB of disk space (a bit less than twice the size of the loopback file).
-Intel processor architecture is supported.
-Apple silicon (unsuccessful yet) notes are collected in [1](https://github.com/marcindulak/jhalfs-ci/issues/1).
-To be clear, this project does not boot lfs on a physical drive attached to computer,
-but instead boots an lfs image in an `x86_64/amd64` or `aarch64/arm64` qemu.
-
-# Setup
-
-1. Install [docker](https://docs.docker.com/engine/install/ubuntu/) and [docker-compose](https://docs.docker.com/compose/install/).
-   On MacOS install [rancher-desktop](https://rancherdesktop.io/),
-   and during the installation select "moby/dockerd" as the engine.
-   Docker is used to perform the jhalfs build inside of an Ubuntu container.
-
-2. Install [qemu](https://www.qemu.org/).
-   On Ubuntu use `sudo apt-get install -y qemu-kvm` and on MacOS use `brew install qemu`.
-   Qemu is used as a virtual machine used to boot the created lfs system.
-
-3. Install [expect](https://core.tcl-lang.org/expect).
-   On Ubuntu use `sudo apt-get install -y expect` and on MacOS use `brew install expect`.
-   Expect is used to perform an automated test of lfs booting.
 
 # Usage
 
