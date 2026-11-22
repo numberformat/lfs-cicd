@@ -10,9 +10,9 @@ runners cannot reach this private deployment.
 
 The separate adapter and manual workflow are implemented. VM provisioning,
 isolation, tool execution, and cleanup passed a smoke test in the reference
-environment. The first upstream preparation stage and checkpoint handoff also
-passed, including restore/load/mount in a fresh SSD-backed, 12-vCPU clone. A
-complete LFS build has not yet been validated. See the [setup runbook](proxmox-runbook.md).
+environment. The baseline and 12-job workflows both completed the full LFS
+build and automated boot test. The exported 12-job image also booted in a
+separate Proxmox VM. See the [setup runbook](proxmox-runbook.md).
 
 ## Architecture
 
@@ -163,7 +163,7 @@ settings or test failures; general-purpose fixes should be separately reviewable
 | Personal-repository GitHub runner | Installed as a separate macOS LaunchAgent and verified online; organization runner untouched |
 | GitHub Actions smoke workflow | Passed, including provisioning, isolation checks, and cleanup |
 | Full LFS build and final boot test on this adapter | Passed with the upstream default and with `compile_jobs=12` |
-| Final image imported into a separate Proxmox VM | Booted to the console and passed an IPv4 loopback ping |
+| Final image imported into a separate Proxmox VM | Booted to the console, passed an IPv4 loopback ping, and compiled and ran a C program |
 
 The first GitHub Actions [smoke run](https://github.com/numberformat/lfs-cicd/actions/runs/44911463691)
 passed. Both full runs used the reference builder with 12 vCPUs and 16 GiB RAM.
@@ -179,7 +179,8 @@ The parallel trial finished about 3 h 22 min sooner. It needed no additional
 package-specific serial overrides or VM resource changes. After verifying the
 exported disk checksum on the Proxmox host, the image was imported into a
 separate VM with no network interface. Console login and `ping -c 3 127.0.0.1`
-worked. A manual C compilation test inside that final VM was skipped.
+worked. GCC compiled and linked a small C program inside that VM, and the
+resulting executable ran successfully.
 
 The original [README](../README.md) retains upstream's Docker instructions.
 Follow the [Proxmox runbook](proxmox-runbook.md) for this deployment. Keep
