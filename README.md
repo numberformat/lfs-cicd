@@ -78,6 +78,10 @@ The Mac also needs space for the finished image, with a 10 GiB reserve.
 *The image produced by the 12-job build running in Proxmox. The console shows
 the LFS release, the running kernel, and a successful loopback ping.*
 
+On the reference Proxmox server, the full workflow took **about 3 hours
+(2 h 49 min)** with 12 compile jobs in a VM with 12 vCPUs and 16 GiB RAM.
+That includes the automated boot test and final disk image export.
+
 
 ### Names, addresses, and paths
 
