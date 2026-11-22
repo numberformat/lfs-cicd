@@ -166,6 +166,32 @@ If a failure interrupted checkpoint saving, a new full run is the simplest
 recovery. An administrator can also review the incomplete checkpoint set;
 the adapter does not silently mix old and new checkpoints or overwrite them.
 
+## Inspect the final image in Proxmox
+
+1. After the workflow succeeds, locate `build_dir.img` and `manifest.json` in
+   the run's artifact directory. Check the run ID and compile setting in the
+   manifest before selecting the image.
+2. Transfer the raw image to a temporary path on the Proxmox host. Compare its
+   SHA-256 checksum on the Mac (`shasum -a 256`) and the host (`sha256sum`).
+3. As an administrator, create a separate VM with a free ID, SeaBIOS, and no
+   network interface. The reference inspection VM used two vCPUs and 2 GiB RAM.
+   Import the image with `qm importdisk VMID /path/to/build_dir.img local-lvm`,
+   substituting the VM ID, staged path, and storage for your host. In Proxmox,
+   attach the imported disk as `virtio0`, set it first in the boot order, and
+   start the VM. Remove the temporary host copy after verifying the import.
+4. Open the VM's **Console**, log in, and run `cat /etc/os-release`, `uname -r`,
+   and `ping -c 3 127.0.0.1` to check the release, kernel, and loopback.
+
+The reference 12-job run used a local Mac monitor that checked GitHub Actions
+every 15 minutes and imported the image after success. The monitor was local
+to that run. For future builds, follow the import steps above unless you have
+set up local automation for that run.
+
+For a dedicated compute machine that powers off between builds, a standalone
+Proxmox host can run the same workflow. Restore or recreate the builder
+template, configure the isolated bridge and restricted SSH broker on that host,
+then update the runner's host setting and run a smoke test before building.
+
 ## GitHub Actions runner
 
 Use the [README installation steps](../README.md#install-the-local-proxmox-runner)

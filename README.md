@@ -6,8 +6,10 @@
 > disk image. See the [Proxmox design and implementation status](docs/proxmox-design.md)
 > for template maintenance, isolation, build stages, and the proposed update policy.
 > See the [setup and operation guide](docs/proxmox-runbook.md) for the separate adapter.
-> The GitHub Actions smoke test and full build, including its boot test, passed. Upstream build scripts,
-> CI stages, and workflow triggers are preserved to ease upstream pulls and contributions.
+> The baseline and 12-job builds passed. The 12-job image also booted in a
+> separate Proxmox VM. See the [build results](docs/proxmox-design.md#implementation-status)
+> and [console inspection steps](docs/proxmox-runbook.md#inspect-the-final-image-in-proxmox).
+> Upstream build scripts, CI stages, and workflow triggers are preserved.
 
 ## Prerequisites and deployment assumptions
 

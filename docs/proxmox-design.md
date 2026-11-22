@@ -162,11 +162,24 @@ settings or test failures; general-purpose fixes should be separately reviewable
 | Local artifact/checkpoint transport | Full build and final image export passed |
 | Personal-repository GitHub runner | Installed as a separate macOS LaunchAgent and verified online; organization runner untouched |
 | GitHub Actions smoke workflow | Passed, including provisioning, isolation checks, and cleanup |
-| Full LFS build and final boot test on this adapter | Passed |
+| Full LFS build and final boot test on this adapter | Passed with the upstream default and with `compile_jobs=12` |
+| Final image imported into a separate Proxmox VM | Booted to the console and passed an IPv4 loopback ping |
 
 The first GitHub Actions [smoke run](https://github.com/numberformat/lfs-cicd/actions/runs/44911463691)
-passed. The [full validation build](https://github.com/numberformat/lfs-cicd/actions/runs/44911665594)
-passed from commit `d5ff296`, including compilation and the workflow's boot test.
+passed. Both full runs used the reference builder with 12 vCPUs and 16 GiB RAM.
+The durations cover the entire workflow, including checkpoints, the boot test,
+and final image export.
+
+| Full run | Compile setting | Workflow duration | Result |
+| --- | --- | --- | --- |
+| [Baseline](https://github.com/numberformat/lfs-cicd/actions/runs/44911665594) | Upstream default (`N_PARALLEL=1`) | 6 h 11 min 4 s | Passed |
+| [Parallel trial](https://github.com/numberformat/lfs-cicd/actions/runs/44956889082) | `compile_jobs=12` | 2 h 48 min 48 s | Passed |
+
+The parallel trial finished about 3 h 22 min sooner. It needed no additional
+package-specific serial overrides or VM resource changes. After verifying the
+exported disk checksum on the Proxmox host, the image was imported into a
+separate VM with no network interface. Console login and `ping -c 3 127.0.0.1`
+worked. A manual C compilation test inside that final VM was skipped.
 
 The original [README](../README.md) retains upstream's Docker instructions.
 Follow the [Proxmox runbook](proxmox-runbook.md) for this deployment. Keep
