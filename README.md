@@ -171,6 +171,18 @@ Proxmox. To boot the exported image in a separate VM, follow the
 
 ## Upstream reference
 
+The **Review upstream updates** workflow checks the default branch of
+[`marcindulak/jhalfs-ci`](https://github.com/marcindulak/jhalfs-ci) hourly. When
+upstream is ahead, it opens a pull request into this fork and requests review
+from `numberformat` in the [Pull Requests Inbox](https://github.com/pulls/inbox).
+The open pull request follows later upstream commits and stays open for manual
+review and merge. If you decide to merge it, use **Create a merge commit** to
+preserve the upstream commit history for future comparisons.
+
+The workflow needs **Allow GitHub Actions to create and approve pull requests**
+under **Settings → Actions → General → Workflow permissions**. To check upstream
+on demand, use **Actions → Review upstream updates → Run workflow**.
+
 The [upstream GitHub Actions workflow](.github/workflows/linux-gha.yaml) and build
 scripts are preserved. The [manual Docker reference](docs/upstream-docker.md)
 covers the original local procedure.

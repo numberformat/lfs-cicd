@@ -1,0 +1,70 @@
+name: Review upstream updates
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  open-review:
+    if: github.ref_name == github.event.repository.default_branch && github.repository == 'numberformat/lfs-gha-proxmox'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or update the upstream review request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+          UPSTREAM: marcindulak/jhalfs-ci
+          REVIEWER: numberformat
+        shell: bash
+        run: |
+          upstream_branch=$(gh api "repos/$UPSTREAM" --jq .default_branch)
+          head="${UPSTREAM%%/*}:$upstream_branch"
+          comparison=$(jq -rn --arg ref "$BASE...$head" '$ref | @uri')
+          ahead=$(gh api "repos/$REPO/compare/$comparison?per_page=1" --jq .ahead_by)
+          if [[ "$ahead" == 0 ]]; then
+            echo 'Already caught up with upstream.'
+            exit 0
+          fi
+
+          pulls="repos/$REPO/pulls"
+          filters=(--method GET -f "base=$BASE" -f "head=$head" -F per_page=1)
+          pr=$(gh api "$pulls" "${filters[@]}" -f state=open --jq '.[0] // empty')
+          if [[ -z "$pr" ]]; then
+            branch_path=$(jq -rn --arg branch "$upstream_branch" '$branch | @uri')
+            upstream_sha=$(gh api "repos/$UPSTREAM/branches/$branch_path" --jq .commit.sha)
+            last_closed_sha=$(gh api "$pulls" "${filters[@]}" -f state=closed --jq '.[0].head.sha // empty')
+            if [[ "$upstream_sha" == "$last_closed_sha" ]]; then
+              echo 'The pull request for this upstream commit was already closed.'
+              exit 0
+            fi
+
+            pr=$(gh api "$pulls" --method POST \
+              -f "base=$BASE" -f "head=$head" -F maintainer_can_modify=false \
+              -f "title=Sync upstream $UPSTREAM:$upstream_branch" \
+              -f "body=Updates from $UPSTREAM on its default branch. This pull request follows that branch and is open for manual review.")
+          fi
+
+          number=$(jq -r .number <<< "$pr")
+          url=$(jq -r .html_url <<< "$pr")
+          if jq -e --arg reviewer "$REVIEWER" 'any(.requested_reviewers[]; .login == $reviewer)' <<< "$pr" > /dev/null; then
+            echo "Review already requested for $url"
+            exit 0
+          fi
+
+          # A fresh upstream commit needs review again after a previous review.
+          reviewed_sha=$(gh api "$pulls/$number/reviews" --paginate --slurp | jq -r \
+            --arg reviewer "$REVIEWER" '[.[][] | select(.user.login == $reviewer and .state != "PENDING")] | last | .commit_id // empty')
+          if [[ "$reviewed_sha" != "$(jq -r .head.sha <<< "$pr")" ]]; then
+            gh api "$pulls/$number/requested_reviewers" --method POST -f "reviewers[]=$REVIEWER" --silent
+          fi
+          echo "$url"
