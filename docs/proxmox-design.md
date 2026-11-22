@@ -182,7 +182,7 @@ separate VM with no network interface. Console login and `ping -c 3 127.0.0.1`
 worked. GCC compiled and linked a small C program inside that VM, and the
 resulting executable ran successfully.
 
-The original [README](../README.md) retains upstream's Docker instructions.
+The [manual Docker reference](upstream-docker.md) retains upstream's Docker instructions.
 Follow the [Proxmox runbook](proxmox-runbook.md) for this deployment. Keep
 Proxmox additions in separate files so upstream pulls and contributions remain
 manageable.

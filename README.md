@@ -1,39 +1,31 @@
+# Linux From Scratch on Proxmox
 
+The `linux-proxmox` GitHub Actions workflow builds a bootable systemd
+[Linux From Scratch](https://www.linuxfromscratch.org/lfs/) disk image using
+[jhalfs](https://www.linuxfromscratch.org/alfs/). A self-hosted macOS runner
+coordinates the build over SSH. Disposable Linux VMs on Proxmox run the
+privileged Docker build, save checkpoints, and test the final image with QEMU.
+The Mac needs the runner and SSH tools. Docker, Compose, QEMU, and Expect are
+installed in the Proxmox builder template.
 
-# Description
+Follow the [runner setup](#install-the-local-proxmox-runner) for a new deployment,
+or [run the workflow](#run-the-github-actions-workflow) if the runner and
+Proxmox host are already configured.
 
-This project performs Automated Linux From Scratch [jhalfs](https://www.linuxfromscratch.org/alfs) using docker.
-The approach is similar to the one taken by [LFScm](https://github.com/masmullin2000/LFScm): lfs is built
-inside of a docker container on a loopback device, and the resulting image booted in qemu.
+## Build results
 
-**Warning**: this project uses privileged containers, and may make your host (laptop) non-bootable if used improperly.
+The baseline and 12-job builds passed. The exported 12-job image also booted
+in a separate Proxmox VM. See the [validation results](docs/proxmox-design.md#implementation-status)
+for both runs.
 
-The [jhalfs](https://www.linuxfromscratch.org/alfs) is a set of scripts which retrieves
-the Linux From Scratch [lfs](https://www.linuxfromscratch.org/lfs/) book, extracts
-the commands by parsing the chapter's XML, and generates scripts managed using a makefile.
-The [systemd version of the lfs](https://www.linuxfromscratch.org/lfs/view/systemd/) book is used,
-as systemd is the standard nowadays.
+![Proxmox console showing the built Linux From Scratch guest, its kernel version, and a successful loopback ping](docs/images/proxmox-lfs-console.png)
 
-**Note**: the setup requires about 25GB of disk space (a bit less than twice the size of the loopback file).
-Intel processor architecture is supported.
-Apple silicon (unsuccessful yet) notes are collected in [1](https://github.com/marcindulak/jhalfs-ci/issues/1).
-To be clear, this project does not boot lfs on a physical drive attached to computer,
-but instead boots an lfs image in an `x86_64/amd64` or `aarch64/arm64` qemu.
+*The image produced by the 12-job build running in Proxmox. The console shows
+the LFS release, the running kernel, and a successful loopback ping.*
 
-# Setup
-
-1. Install [docker](https://docs.docker.com/engine/install/ubuntu/) and [docker-compose](https://docs.docker.com/compose/install/).
-   On MacOS install [rancher-desktop](https://rancherdesktop.io/),
-   and during the installation select "moby/dockerd" as the engine.
-   Docker is used to perform the jhalfs build inside of an Ubuntu container.
-
-2. Install [qemu](https://www.qemu.org/).
-   On Ubuntu use `sudo apt-get install -y qemu-kvm` and on MacOS use `brew install qemu`.
-   Qemu is used as a virtual machine used to boot the created lfs system.
-
-3. Install [expect](https://core.tcl-lang.org/expect).
-   On Ubuntu use `sudo apt-get install -y expect` and on MacOS use `brew install expect`.
-   Expect is used to perform an automated test of lfs booting.
+On the reference Proxmox server, the full workflow took **about 3 hours
+(2 h 49 min)** with 12 compile jobs in a VM with 12 vCPUs and 16 GiB RAM.
+That includes the automated boot test and final disk image export.
 
 ## Prerequisites and deployment assumptions
 
@@ -60,28 +52,6 @@ The VM pool must have room for the 100 GiB builder **plus a 100 GiB reserve**.
 Checkpoint writes retain a separate 100 GiB filesystem reserve. Allow substantial
 checkpoint capacity across runs and remove obsolete checkpoints as an administrator.
 The Mac also needs space for the finished image, with a 10 GiB reserve.
-
-
-> **Proxmox deployment (this fork):** The supported deployment being developed
-> requires a **Proxmox VE server and a self-hosted GitHub Actions runner on the
-> local network** (reference runner: MacBook). It builds a persistent systemd LFS
-> disk image. See the [Proxmox design and implementation status](docs/proxmox-design.md)
-> for template maintenance, isolation, build stages, and the proposed update policy.
-> See the [setup and operation guide](docs/proxmox-runbook.md) for the separate adapter.
-> The baseline and 12-job builds passed. The 12-job image also booted in a
-> separate Proxmox VM. See the [build results](docs/proxmox-design.md#implementation-status)
-> and [console inspection steps](docs/proxmox-runbook.md#inspect-the-final-image-in-proxmox).
-> Upstream build scripts, CI stages, and workflow triggers are preserved.
-
-![Proxmox console showing the built Linux From Scratch guest, its kernel version, and a successful loopback ping](docs/images/proxmox-lfs-console.png)
-
-*The image produced by the 12-job build running in Proxmox. The console shows
-the LFS release, the running kernel, and a successful loopback ping.*
-
-On the reference Proxmox server, the full workflow took **about 3 hours
-(2 h 49 min)** with 12 compile jobs in a VM with 12 vCPUs and 16 GiB RAM.
-That includes the automated boot test and final disk image export.
-
 
 ### Names, addresses, and paths
 
@@ -111,39 +81,12 @@ Never attach another VM or a physical uplink to the private build bridge.
 The installer requires per-interface forwarding on the chosen uplink; it does
 not enable the global forwarding switch. See the [administrator runbook](docs/proxmox-runbook.md).
 
-### Returning after a few months
-
-1. Read this section and the [implementation status](docs/proxmox-design.md#implementation-status).
-   Template 9001 being stopped is normal. VM 9100 and `active.json` being absent
-   while idle is also normal; the workflow creates and removes the builder.
-2. On the reference Mac, find the actual private deployment inventory at
-   `~/.config/lfs-proxmox/deployment.json`. It records local names and paths,
-   not private-key contents. A fresh clone will not contain this private file;
-   the repository Actions variables and Proxmox administrator configuration are
-   the other sources of truth. Back up the inventory and key outside Git.
-3. Check the template and storage in Proxmox: `qm config 9001` and `pvesm status`.
-   Confirm the template, agent, storage, and free space before building.
-4. Check the Mac runner from its installation directory: `./svc.sh status`.
-   In repository **Settings → Actions → Runners**, it should be online and have
-   the `lfs-proxmox` label. Check the three Actions variables listed below.
-5. In **Actions → linux-proxmox**, run `smoke` before `build`. Keep the Mac logged
-   in, powered, and connected. Do not rerun first-time host installation over a
-   working deployment or disable isolation guards to bypass an error.
-6. Find the completed disk at `artifacts/RUN_ID-ATTEMPT/build_dir.img` under the
-   configured artifact directory. Intermediate checkpoints are on Proxmox.
-   Inspect GitHub Actions logs for failures; use a short tail first.
-
 ## Install the local Proxmox runner
-
-This fork adds **`linux-proxmox`** alongside upstream's **`linux-gha`**.
-`linux-gha` is unchanged. `linux-proxmox` is manually started from GitHub Actions
-and uses a repository-scoped runner on a Mac on your local network; the build
-itself runs in isolated Proxmox VMs.
 
 1. Install Python 3.10 or newer and the GitHub CLI (`gh`) on the Mac, then
    authenticate with `gh auth login` using an account permitted to manage this
    repository's runners and Actions variables.
-2. Complete the [Proxmox administrator setup](docs/proxmox-runbook.md), including
+2. Complete the [Proxmox administrator setup](docs/proxmox-runbook.md#one-time-proxmox-administrator-setup), including
    the builder template, isolated bridge, restricted provisioning key, and
    trusted Proxmox SSH host key. Keep the private key outside the checkout.
 3. From this repository, install the dedicated runner. Replace the example
@@ -168,12 +111,6 @@ repository Actions variables: `LFS_PROXMOX_HOST`, `LFS_PROXMOX_KEY_PATH`, and
 `LFS_PROXMOX_ARTIFACTS`. Only the key's local path is configured; the private key
 is not uploaded to GitHub. Site-specific settings stay out of public source.
 
-After the workflow files are committed and pushed to the repository's default
-branch, open **Actions → linux-proxmox → Run workflow**. Select `smoke` first to
-test VM creation, isolation, and cleanup; select `build` to run all six upstream
-stages and retain the resulting disk image. The definition is
-[linux-proxmox.yaml](.github/workflows/linux-proxmox.yaml).
-
 Keep the Mac logged in, powered, and connected to the network. The build step
 prevents idle sleep. To manage only this runner:
 
@@ -190,148 +127,50 @@ organization runners do not serve repositories outside their organization.
 See [GitHub's runner setup guide](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners)
 and the [full Proxmox runbook](docs/proxmox-runbook.md).
 
-# Usage
+## Run the GitHub Actions workflow
 
-## Building the system
+1. In the repository on GitHub, open **Actions → linux-proxmox → Run workflow**.
+   The [workflow definition](.github/workflows/linux-proxmox.yaml) must be on the
+   default branch for manual dispatch.
+2. Select `smoke` for the first run. It checks builder VM creation, isolation,
+   and cleanup.
+3. After the smoke test passes, dispatch again with mode `build`. Leave
+   `compile_jobs` blank for the upstream default, or enter `12` to reproduce
+   the parallel trial on a suitably sized builder.
+4. Follow the run in GitHub Actions. The workflow runs all six stages, tests
+   that the image boots, and exports it to the Mac runner.
 
-1. The setup in this repository uses docker to start an [ubuntu:latest](https://hub.docker.com/_/ubuntu/) container,
-inside of which lfs is built.
+The finished disk is `build_dir.img` under
+`LFS_PROXMOX_ARTIFACTS/RUN_ID-ATTEMPT/` on the Mac. The default artifact root is
+`~/.local/share/lfs-proxmox/artifacts`. Intermediate checkpoints stay on
+Proxmox. To boot the exported image in a separate VM, follow the
+[Proxmox console inspection steps](docs/proxmox-runbook.md#inspect-the-final-image-in-proxmox).
 
-   ```sh
-   docker compose up -d
-   ```
+## Returning after a few months
 
-   In preliminary steps a loopback device is created, formatted and mounted as the destination for
-   the scripts generated by`jhalfs`. Due to the use of a loopback device the Ubuntu container
-   needs to be started with `--privileged` option.
+1. Read this section and the [implementation status](docs/proxmox-design.md#implementation-status).
+   Template 9001 being stopped is normal. VM 9100 and `active.json` being absent
+   while idle is also normal; the workflow creates and removes the builder.
+2. On the reference Mac, find the actual private deployment inventory at
+   `~/.config/lfs-proxmox/deployment.json`. It records local names and paths,
+   not private-key contents. A fresh clone will not contain this private file;
+   the repository Actions variables and Proxmox administrator configuration are
+   the other sources of truth. Back up the inventory and key outside Git.
+3. Check the template and storage in Proxmox: `qm config 9001` and `pvesm status`.
+   Confirm the template, agent, storage, and free space before building.
+4. Check the Mac runner from its installation directory: `./svc.sh status`.
+   In repository **Settings → Actions → Runners**, it should be online and have
+   the `lfs-proxmox` label. Check the three Actions variables listed in the
+   [runner setup](#install-the-local-proxmox-runner).
+5. In **Actions → linux-proxmox**, run `smoke` before `build`. Keep the Mac logged
+   in, powered, and connected. Do not rerun first-time host installation over a
+   working deployment or disable isolation guards to bypass an error.
+6. Find the completed disk at `RUN_ID-ATTEMPT/build_dir.img` under the
+   configured artifact directory. Intermediate checkpoints are on Proxmox.
+   Inspect GitHub Actions logs for failures; use a short tail first.
 
-2. The [02-preparing-for-the-build.sh](02-preparing-for-the-build.sh) script in this repository performs these preliminary steps, up to and including
-[chapter4](https://www.linuxfromscratch.org/lfs/view/systemd/chapter04/chapter04.html) of the lfs book.
-After the preliminary steps are done, `jhalfs run` is invoked to generate the scripts and makefile.
-The configuration used by `jhalfs run` is stored in the `configuration` file in the root folder of this repository.
+## Upstream reference
 
-   ```sh
-   docker compose exec jhalfs bash -c "cd /vagrant && bash /vagrant/02-prepare-for-the-build.sh"
-   ```
-
-   Fetch the commits of the jhalfs and lfs books with:
-   ```sh
-   docker compose exec jhalfs bash -c "su - vagrant -c 'cd /home/vagrant/jhalfs && git show --oneline --no-abbrev --shortstat'"
-   ```
-   ```sh
-   docker compose exec jhalfs bash -c "su - vagrant -c 'source /vagrant/jhalfs/jhalfs.sh && cd \$LFS/jhalfs/book-source && git show --oneline --no-abbrev --shortstat'"
-   ```
-
-   The references to `/vagrant` in this repository are leftovers from a [vagrant](https://www.vagrantup.com/) based setup.
-
-   Due to the [6h limit](https://docs.github.com/en/actions/learn-github-actions/usage-limits-billing-and-administration#usage-limits)
-   on a github action runner, disable slow chapter8 tests.
-   ```sh
-   docker compose exec jhalfs bash -c "su - vagrant -c 'source /vagrant/jhalfs/jhalfs.sh && cd \$LFS/jhalfs/lfs-commands/chapter08 && sed -i \"/make -k check/d\" 8*-glibc && sed -i \"/Timed out/d\" 8*-glibc && sed -i \"/test_summary/d\" 8*-glibc'"
-   docker compose exec jhalfs bash -c "su - vagrant -c 'source /vagrant/jhalfs/jhalfs.sh && cd \$LFS/jhalfs/lfs-commands/chapter08 && sed -i \"/make -k check/d\" 8*-gcc && sed -i \"/Timed out/d\" 8*-gcc && sed -i \"/test_summary/d\" 8*-gcc'"
-   ```
-
-   Since the kernel `.config` is changing rapidly, use [defconfig](https://wiki.gentoo.org/wiki/Kernel/Configuration) instead of a
-   static configuration file. If any of the expected options are not included in the `.config` the kernel's make will hang waiting for
-   user's `y/n` input, and defconfig is a way to prevent this.
-   ```sh
-   docker compose exec jhalfs bash -c "su - vagrant -c 'source /vagrant/jhalfs/jhalfs.sh && cd \$LFS/jhalfs/lfs-commands/chapter10 && sed -i \"s|cp -v ../kernel-config.*|make defconfig|\" 10*-kernel'"
-   ```
-
-3. From this point the individual makefile targets can be executed, for example:
-
-   ```sh
-   docker compose exec jhalfs bash -c "su - vagrant -c 'source /vagrant/jhalfs/jhalfs.sh && cd \$LFS/jhalfs && make ck_UID'"
-   ```
-
-   See `jhalfs/targets` for the list of existing makefile targets. If you prefer to run all targets use `make all`.
-   The result of the build is available under `jhalfs/mnt/build_dir`. If you want to access the contents of this directory
-   from the host (laptop), mount it `sudo mount $(cat jhalfs/build_dir.dev) $PWD/jhalfs/mnt/build_dir`.
-
-   At the end of the build, print the [SBUs](https://www.linuxfromscratch.org/~bdubbs/about.html) report:
-   ```sh
-   docker compose exec jhalfs bash -c "su - vagrant -c 'source /vagrant/jhalfs/jhalfs.sh && cat \$LFS/jhalfs/*SBU_DU*.report'"
-   ```
-
-## Booting the system
-
-The backups of the lfs filesystem are present in the root directory of this project.
-They can be used to boot a system. In order to boot the created system, https://www.qemu.org/ is used here.
-
-1. Configure grub, see [chapter10](https://www.linuxfromscratch.org/lfs/view/systemd/chapter10/grub.html):
-
-   ```sh
-   docker compose exec jhalfs bash -c 'source /vagrant/jhalfs/jhalfs.sh && cd /vagrant && bash 10.4-configure-grub.sh'
-   ```
-
-   Note that when qemu is used the `root` device is `/dev/vda1`.
-
-2. Test the system boot, from the host (laptop):
-
-   ```sh
-   sudo chown $USER build_dir.img
-   time TERM=linux JHALFS_ARCH=$(uname -m) expect -f 10.4-test-boot.exp
-   ```
-
-   The expect script will boot the system, login as root using the password configured in step 2. above,
-   and print the pretty release of the system. It should contain "Linux From Scratch".
-   See the expect script for a command used to launch the system using `qemu-system`.
-
-3. If desired, backup the system, see [chapter7](https://www.linuxfromscratch.org/lfs/view/systemd/chapter07/cleanup.html):
-
-   ```sh
-   docker compose exec jhalfs bash -c "source /vagrant/jhalfs/jhalfs.sh && cd \$LFS && bash /vagrant/10.4-save-backup.sh chapter10"
-   ```
-
-   Copy the backup to the host (laptop):
-
-   ```sh
-   docker compose exec jhalfs bash -c "source /vagrant/jhalfs/jhalfs.sh && cd \$LFS && cp -p jhalfs/chapter10*.tar* /vagrant"
-   ```
-
-4. **Only** after finishing the project exploration, stop the container, and cleanup the loopback device from the host (laptop):
-
-   ```sh
-   docker compose stop jhalfs
-   for dev in $(losetup -n -l -O NAME -j /vagrant/build_dir.img); do echo "Detaching $dev" && sudo losetup -d $dev; done
-   for dev in $(losetup -n -l -O NAME -j /build_dir.img); do echo "Detaching $dev" && sudo losetup -d $dev; done
-   ```
-
-   Do not neglect this step, otherwise you'll keep dangling loopback devices using virtually space on disk.
-
-# Saving intermediate images
-
-In order to save the current work, commit the state of the container, for example after the `make ck_SETUP` target
-in [II. Preparing for the Build](https://www.linuxfromscratch.org/lfs/view/systemd/part2.html), stop and remove the container:
-```sh
-docker commit -m "II. Preparing for the Build" jhalfs jhalfs:part2
-docker save jhalfs:part2 > "jhalfs:part2.tar"
-docker stop jhalfs
-docker rm jhalfs
-```
-
-If the image was saved, and transfered to another host (laptop), it needs to be loaded, and used to start a container:
-```sh
-docker load < "jhalfs:part2.tar"
-JHALFS_IMAGE=jhalfs:part2 docker compose up -d
-# Attach and mount the loopback device, it is assumed to be free
-docker compose exec jhalfs bash -c "losetup \$(cat /vagrant/jhalfs/build_dir.dev) /vagrant/build_dir.img && mount -a"
-```
-
-Other parts, after the `make mk_CHROOT` target in
-[III. Building the LFS Cross Toolchain and Temporary Tools](https://www.linuxfromscratch.org/lfs/view/systemd/part3.html) and
-after the `make mk_BOOT` target in [IV. Building the LFS System](https://www.linuxfromscratch.org/lfs/view/systemd/part4.html)
-are other convenient places to save work. This is useful to split work to deal with time limits of the continuous integration workers.
-```sh
-docker commit -m "III. Building the LFS Cross Toolchain and Temporary Tools" jhalfs jhalfs:part3
-docker save jhalfs:part3 > "jhalfs:part3.tar"
-docker stop jhalfs
-docker rm jhalfs
-```
-
-```sh
-docker commit -m "IV. Building the LFS System" jhalfs jhalfs:part4
-docker save jhalfs:part4 > "jhalfs:part4.tar"
-docker stop jhalfs
-docker rm jhalfs
-```
+The [upstream GitHub Actions workflow](.github/workflows/linux-gha.yaml) and build
+scripts are preserved. The [manual Docker reference](docs/upstream-docker.md)
+covers the original local procedure.
