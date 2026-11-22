@@ -2,7 +2,8 @@ name: Review upstream updates
 
 on:
   schedule:
-    - cron: '23 * * * *'
+    - cron: '23 9 * * 5'
+      timezone: America/New_York
   workflow_dispatch:
 
 permissions:
